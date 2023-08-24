@@ -1,6 +1,9 @@
 # Default Output of PDF parsing
 outputs/
 
+# For development, a few pdfs to test the accuracy
+example_pdfs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -11,6 +14,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+.DS_Store
 build/
 develop-eggs/
 dist/
