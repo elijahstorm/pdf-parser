@@ -60,22 +60,25 @@ def get_output_file(input_pdf_file):
     )
 
 
-def upload_temp_file(local_image_path):
-    # Initialize S3 client
+def upload_temp_file(local_image_path, aws_access_key, aws_secret_key, bucket_name):
     s3 = boto3.client(
         "s3", aws_access_key_id=aws_access_key, aws_secret_access_key=aws_secret_key
     )
 
-    # Upload image to S3
     image_key = os.path.basename(local_image_path)
-    s3.upload_file(local_image_path, bucket_name, image_key)
-
-    # Generate temporary URL for the uploaded image
-    return s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": bucket_name, "Key": image_key},
-        ExpiresIn=3600,  # URL expiration time in seconds
+    s3.upload_file(
+        local_image_path, bucket_name, image_key, ExtraArgs={"ACL": "public-read"}
     )
+
+    temp_url = s3.generate_presigned_url(
+        "get_object", Params={"Bucket": bucket_name, "Key": image_key}, ExpiresIn=3600
+    )
+
+    def delete_uploaded_image():
+        s3.delete_object(Bucket=bucket_name, Key=image_key)
+        os.remove(local_image_path)
+
+    return temp_url, delete_uploaded_image
 
 
 def write_solution(output_csv_file, structured_text):
@@ -113,23 +116,25 @@ if __name__ == "__main__":
         sys.exit(1)
 
     input_pdf_file = sys.argv[1]
-    image_path = image_path = "image_outputs/" + input_pdf_file.replace(".pdf", ".jpg")
     prompt = read_prompt_from_file("prompt.txt")
     output_csv_file = get_output_file(input_pdf_file)
     max_tokens = int(sys.argv[2]) if len(sys.argv) >= 3 else 100
-
-    pdf_to_image(input_pdf_file, image_path)
-    upload_temp_file(image_path)
 
     if args.text_only:
         openai.api_key = api_key
         pdf_text = extract_pdf_text(input_pdf_file)
         structured_text = generate_response_from_pdf(prompt, pdf_text, max_tokens)
     else:
+        image_path = "image_outputs/" + input_pdf_file.replace(".pdf", ".jpg")
+        pdf_to_image(input_pdf_file, image_path)
+        s3_image, delete_image = upload_temp_file(
+            image_path, aws_access_key, aws_secret_key, bucket_name
+        )
+
         response = requests.post(
             "https://api.openai.com/v1/engines/davinci-codex/completions",
             json={
-                "prompt": f"{prompt}\n{image_path}",
+                "prompt": f"{prompt}\n{s3_image}",
                 "max_tokens": 150,
             },
             headers={
@@ -139,6 +144,7 @@ if __name__ == "__main__":
         )
         result = response.json()
         structured_text = result["choices"][0]["text"].strip()
+        delete_image()
 
     write_solution(output_csv_file, structured_text)
     print(f"Response saved in {output_csv_file}")
