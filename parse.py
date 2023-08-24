@@ -123,6 +123,7 @@ if __name__ == "__main__":
 
     if args.text_only:
         openai.api_key = api_key
+        pdf_text = extract_pdf_text(input_pdf_file)
         structured_text = generate_response_from_pdf(prompt, pdf_text, max_tokens)
     else:
         response = requests.post(
