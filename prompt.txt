@@ -6,7 +6,6 @@ Your job is to try and figure out what questions are, for each and every questio
 The required output syntax is a CSV file with `Question Text`, `Question Type`, and `Options`. We will be saving your response directly to the CSV file, and we do not want any invalid data in the file, so follow these rules:
 
 * Please do not include the header of the CSV file, because it will already be included.
-* Please do not wrap strings with quotation marks.
 * Please do not include any text outside of the CVS file.
 
 

@@ -1,5 +1,6 @@
 # Default Output of PDF parsing
 outputs/
+image_outputs/
 
 # For development, a few pdfs to test the accuracy
 example_pdfs/
