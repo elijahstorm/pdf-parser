@@ -52,7 +52,7 @@ def extract_pdf_text(pdf_path):
     return pdf_text
 
 
-def get_output_file():
+def get_output_file(input_pdf_file):
     return (
         "outputs/" + input_pdf_file.replace(".pdf", ".csv")
         if len(sys.argv) < 4
@@ -76,6 +76,15 @@ def upload_temp_file(local_image_path):
         Params={"Bucket": bucket_name, "Key": image_key},
         ExpiresIn=3600,  # URL expiration time in seconds
     )
+
+
+def write_solution(output_csv_file, structured_text):
+    output_directory = os.path.dirname(output_csv_file)
+    os.makedirs(output_directory, exist_ok=True)
+
+    with open(output_csv_file, "w") as f:
+        f.write('"Question Text","Question Type","Options"\n')
+        f.write(f"{structured_text}\n")
 
 
 if __name__ == "__main__":
@@ -105,15 +114,12 @@ if __name__ == "__main__":
 
     input_pdf_file = sys.argv[1]
     image_path = image_path = "image_outputs/" + input_pdf_file.replace(".pdf", ".jpg")
+    prompt = read_prompt_from_file("prompt.txt")
+    output_csv_file = get_output_file(input_pdf_file)
+    max_tokens = int(sys.argv[2]) if len(sys.argv) >= 3 else 100
 
     pdf_to_image(input_pdf_file, image_path)
     upload_temp_file(image_path)
-
-    prompt = read_prompt_from_file("prompt.txt")
-    output_csv_file = get_output_file()
-    max_tokens = int(sys.argv[2]) if len(sys.argv) >= 3 else 100
-
-    max_tokens = int(sys.argv[2]) if len(sys.argv) >= 3 else 100
 
     if args.text_only:
         openai.api_key = api_key
@@ -133,11 +139,5 @@ if __name__ == "__main__":
         result = response.json()
         structured_text = result["choices"][0]["text"].strip()
 
-    output_directory = os.path.dirname(output_csv_file)
-    os.makedirs(output_directory, exist_ok=True)
-
-    with open(output_csv_file, "w") as f:
-        f.write('"Question Text","Question Type","Options"\n')
-        f.write(f"{structured_text}\n")
-
+    write_solution(output_csv_file, structured_text)
     print(f"Response saved in {output_csv_file}")
