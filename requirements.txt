@@ -1,0 +1,7 @@
+pytesseract
+PyMuPDF
+boto3
+openai
+Pillow
+Wand
+python-dotenv

@@ -19,7 +19,6 @@ parser.add_argument(
     "--lang", type=str, default="eng", help="Language for OCR (default: eng)"
 )
 args, _ = parser.parse_known_args()
-pytesseract.pytesseract.tesseract_cmd = r"/usr/local/Cellar/tesseract/5.3.2_1"
 
 
 load_dotenv()
@@ -113,6 +112,9 @@ if __name__ == "__main__":
     aws_access_key = os.getenv("AWS_ACCESS_KEY")
     aws_secret_key = os.getenv("AWS_SECRET_KEY")
     bucket_name = os.getenv("BUCKET_NAME")
+    tesseract_path = os.getenv("TESSERACT_PATH")
+    # os.chmod(tesseract_path, 0o755)
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
     if not api_key:
         print("OPENAI_API_KEY not found in .env file.")
@@ -125,6 +127,9 @@ if __name__ == "__main__":
         sys.exit(1)
     if not bucket_name:
         print("BUCKET_NAME not found in .env file.")
+        sys.exit(1)
+    if not tesseract_path:
+        print("TESSERACT_PATH not found in .env file.")
         sys.exit(1)
 
     input_pdf_file = sys.argv[1]
@@ -156,6 +161,10 @@ if __name__ == "__main__":
                 # delete_image()
                 os.remove(saved_image)
 
-    shutil.rmtree(IMAGE_OUTPUT_DIR)
-    write_solution(output_csv_file, structured_text)
-    print(f"Response saved in {output_csv_file}")
+        shutil.rmtree(IMAGE_OUTPUT_DIR)
+
+    if len(structured_text):
+        write_solution(output_csv_file, structured_text)
+        print(f"Response saved in {output_csv_file}")
+    else:
+        print(f"No data processed for {input_pdf_file}")
