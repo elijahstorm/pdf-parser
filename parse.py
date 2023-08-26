@@ -1,20 +1,26 @@
 import os
 import sys
-import openai
 import fitz
 import boto3
-import requests
-import tempfile
+import openai
+import shutil
 import argparse
-import requests
-from dotenv import load_dotenv
-from wand.image import Image
+import pytesseract
+from PIL import Image as PILImage
+from wand.image import Image as WandImage
 from wand.color import Color
+from dotenv import load_dotenv
 
 
+IMAGE_OUTPUT_DIR = "image_outputs/"
 parser = argparse.ArgumentParser()
 parser.add_argument("--text-only", type=str, help="Do not parse with image generation")
+parser.add_argument(
+    "--lang", type=str, default="eng", help="Language for OCR (default: eng)"
+)
 args, _ = parser.parse_known_args()
+pytesseract.pytesseract.tesseract_cmd = r"/usr/local/Cellar/tesseract/5.3.2_1"
+
 
 load_dotenv()
 
@@ -36,11 +42,19 @@ def generate_response_from_pdf(prompt, pdf_text, max_tokens):
     return response.choices[0].message["content"].strip()
 
 
-def pdf_to_image(pdf_path, image_path, resolution=300, background_color="white"):
-    with Image(filename=pdf_path, resolution=resolution) as img:
+def pdf_to_image(
+    pdf_path, image_path, resolution=300, background_color="white", file_type=".jpg"
+):
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    with WandImage(filename=pdf_path, resolution=resolution) as img:
         img.background_color = Color(background_color)
-        img.alpha_channel = "remove"  # Remove alpha channel if present
+        img.alpha_channel = "remove"
         img.save(filename=image_path)
+        return (
+            [f"{image_path}-{i}{file_type}" for i in range(len(img.sequence))]
+            if len(img.sequence) > 1
+            else [f"{image_path}{file_type}"]
+        )
 
 
 def extract_pdf_text(pdf_path):
@@ -66,9 +80,7 @@ def upload_temp_file(local_image_path, aws_access_key, aws_secret_key, bucket_na
     )
 
     image_key = os.path.basename(local_image_path)
-    s3.upload_file(
-        local_image_path, bucket_name, image_key, ExtraArgs={"ACL": "public-read"}
-    )
+    s3.upload_file(local_image_path, bucket_name, image_key)
 
     temp_url = s3.generate_presigned_url(
         "get_object", Params={"Bucket": bucket_name, "Key": image_key}, ExpiresIn=3600
@@ -119,32 +131,32 @@ if __name__ == "__main__":
     prompt = read_prompt_from_file("prompt.txt")
     output_csv_file = get_output_file(input_pdf_file)
     max_tokens = int(sys.argv[2]) if len(sys.argv) >= 3 else 100
+    structured_text = ""
 
     if args.text_only:
         openai.api_key = api_key
         pdf_text = extract_pdf_text(input_pdf_file)
-        structured_text = generate_response_from_pdf(prompt, pdf_text, max_tokens)
+        structured_text += generate_response_from_pdf(prompt, pdf_text, max_tokens)
     else:
-        image_path = "image_outputs/" + input_pdf_file.replace(".pdf", ".jpg")
-        pdf_to_image(input_pdf_file, image_path)
-        s3_image, delete_image = upload_temp_file(
-            image_path, aws_access_key, aws_secret_key, bucket_name
-        )
+        image_path = IMAGE_OUTPUT_DIR + input_pdf_file.replace(".pdf", "")
+        saved_images = pdf_to_image(input_pdf_file, image_path)
 
-        response = requests.post(
-            "https://api.openai.com/v1/engines/davinci-codex/completions",
-            json={
-                "prompt": f"{prompt}\n{s3_image}",
-                "max_tokens": 150,
-            },
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-        )
-        result = response.json()
-        structured_text = result["choices"][0]["text"].strip()
-        delete_image()
+        for i, saved_image in enumerate(saved_images):
+            print(f"---{saved_image}")
+            try:
+                # s3_image, delete_image = upload_temp_file(
+                #     saved_image, aws_access_key, aws_secret_key, bucket_name
+                # )
+                response = pytesseract.image_to_string(
+                    PILImage.open(saved_image), lang=args.lang
+                )
+                structured_text += response
+            except Exception as e:
+                print(f"An error occurred while processing page {i + 1}: {e}")
+            finally:
+                # delete_image()
+                os.remove(saved_image)
 
+    shutil.rmtree(IMAGE_OUTPUT_DIR)
     write_solution(output_csv_file, structured_text)
     print(f"Response saved in {output_csv_file}")

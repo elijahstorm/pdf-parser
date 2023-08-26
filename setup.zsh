@@ -10,3 +10,5 @@ echo "alias parse_pdfs='python3 parse.py '" >> ~/.zshrc
 source ~/.zshrc
 
 echo "Alias 'parse_pdfs' for the Python script has been set up."
+
+brew install tesseract
