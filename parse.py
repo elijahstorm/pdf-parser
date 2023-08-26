@@ -142,7 +142,6 @@ if __name__ == "__main__":
         saved_images = pdf_to_image(input_pdf_file, image_path)
 
         for i, saved_image in enumerate(saved_images):
-            print(f"---{saved_image}")
             try:
                 # s3_image, delete_image = upload_temp_file(
                 #     saved_image, aws_access_key, aws_secret_key, bucket_name
