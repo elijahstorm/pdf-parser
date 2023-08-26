@@ -49,7 +49,7 @@ def pdf_to_image(
     with WandImage(filename=pdf_path, resolution=resolution) as img:
         img.background_color = Color(background_color)
         img.alpha_channel = "remove"
-        img.save(filename=image_path)
+        img.save(filename=f"{image_path}{file_type}")
         return (
             [f"{image_path}-{i}{file_type}" for i in range(len(img.sequence))]
             if len(img.sequence) > 1
